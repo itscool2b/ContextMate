@@ -25,5 +25,12 @@ def query_chunks(query_vector, path=None, n_results=5):
         kwargs["where"] = {"path": path}
     return collection.query(**kwargs)
 
+def get_file_hash(path):
+    """Return the stored content hash for a file, or None if not indexed."""
+    existing = collection.get(where={"path": path}, limit=1)
+    if existing["ids"]:
+        return existing["metadatas"][0].get("content_hash")
+    return None
+
 def delete_file(path):
     collection.delete(where={"path": path})

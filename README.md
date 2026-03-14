@@ -4,6 +4,8 @@
 context, ContextMate indexes your codebase into meaningful chunks and returns
 only what matters. Local embeddings. No API keys. No cloud.
 
+Supports **Python, JavaScript, TypeScript, Rust, Go, Java, C, C++, Ruby, and C#**.
+
 ```
 tree-sitter (parse) --> Ollama (embed) --> ChromaDB (store/query)
 ```
@@ -64,7 +66,7 @@ Run:
   cd ~/ContextMate
   python3 -m venv venv
   source venv/bin/activate
-  pip install chromadb requests tree-sitter tree-sitter-python fastmcp
+  pip install -r requirements.txt
 
 If git clone fails because ~/ContextMate already exists:
   Run: cd ~/ContextMate && git pull
@@ -97,7 +99,7 @@ Verify registration:
 STEP 5 -- TELL ME TO RESTART
 
 Tell me: "Setup complete. Exit Claude Code fully and reopen it. After
-restarting, run /mcp and confirm you see context-mate with 3 tools. Then
+restarting, run /mcp and confirm you see context-mate with 4 tools. Then
 come back and I will set up your project to use it."
 
 STEP 6 -- AFTER RESTART, CONFIGURE THE PROJECT
@@ -111,6 +113,9 @@ This project uses the `context-mate` MCP server for all code reading and
 search operations.
 
 Rules:
+- At the start of a session, call `index_directory` with the project root
+  to bulk-index all supported files. This makes `search_codebase` work
+  across the entire project.
 - When you need to read a file, use the `read_file` tool instead of reading
   the file directly. Pass the file path and a short description of why you
   need it as the `reason` parameter. The tool returns only the relevant
@@ -130,10 +135,11 @@ Then tell me setup is done.
 
 ## What You Get
 
-After setup, Claude Code has three new tools:
+After setup, Claude Code has four new tools:
 
 | Tool | What it does |
 |---|---|
+| `index_directory(path)` | Indexes all supported files in a directory recursively |
 | `read_file(path, reason)` | Indexes a file and returns only the chunks relevant to your reason |
 | `search_codebase(query)` | Searches all indexed files for code matching a natural language query |
 | `get_session_summary()` | Shows how many queries and chunks were served this session |
@@ -170,7 +176,7 @@ git clone https://github.com/itscool2b/Cerno.git ~/ContextMate
 cd ~/ContextMate
 python3 -m venv venv
 source venv/bin/activate
-pip install chromadb requests tree-sitter tree-sitter-python fastmcp
+pip install -r requirements.txt
 ```
 
 ### Register
@@ -217,17 +223,39 @@ rm -rf ~/ContextMate/contextmate_db/  # wipe indexed data
 ```
 
 **Indexing** -- When `read_file` is called, tree-sitter parses the file into
-an AST. Top-level functions, classes, and decorated definitions are extracted
-as chunks. Each chunk is embedded with Ollama (`nomic-embed-text`, 768
-dimensions) and stored in ChromaDB with metadata (path, line range, type).
+an AST using the correct grammar for the file's language. Top-level functions,
+classes, interfaces, structs, and other definitions are extracted as chunks.
+Each chunk is embedded with Ollama (`nomic-embed-text`, 768 dimensions) and
+stored in ChromaDB with metadata (path, line range, type, content hash).
+
+**Smart re-indexing** -- File contents are hashed on each call. If the file
+hasn't changed since it was last indexed, the embedding step is skipped
+entirely, saving time and compute.
 
 **Querying** -- The query string is embedded with the same model. ChromaDB
 runs vector similarity search and returns the top matching chunks.
 `read_file` scopes to one file. `search_codebase` searches everything indexed.
 
 **Storage** -- ChromaDB persists to `./contextmate_db/` on disk. Data survives
-restarts. Re-indexing a file deletes old chunks first so edits are always
-reflected.
+restarts. Changed files are re-indexed automatically on the next `read_file`
+call.
+
+---
+
+## Supported Languages
+
+| Language | Extensions |
+|---|---|
+| Python | `.py` |
+| JavaScript | `.js` `.jsx` `.mjs` |
+| TypeScript | `.ts` `.tsx` |
+| Rust | `.rs` |
+| Go | `.go` |
+| Java | `.java` |
+| C | `.c` `.h` |
+| C++ | `.cpp` `.cc` `.cxx` `.hpp` |
+| Ruby | `.rb` |
+| C# | `.cs` |
 
 ---
 
@@ -237,9 +265,10 @@ reflected.
 ContextMate/
   server.py            MCP server entry point, tool definitions
   chroma.py            ChromaDB client, storage and query
-  chunker.py           tree-sitter parser, AST to chunks
+  chunker.py           multi-language tree-sitter parser, AST to chunks
   indexingpipeline.py  parse -> chunk -> embed -> store
   ollama.py            Ollama embedding client
+  requirements.txt     Python dependencies
   contextmate_db/      persistent vector storage (gitignored)
 ```
 
@@ -255,15 +284,15 @@ python3 -c "from server import mcp; print('OK')"`
 **"Connection refused"** -- Ollama is not running. Start it with
 `ollama serve`. Confirm the model is pulled with `ollama list`.
 
-**Empty search results** -- Files must be indexed first. `search_codebase`
-only searches files that `read_file` has been called on. Call `read_file` on
-key files to populate the index.
+**Empty search results** -- Files must be indexed first. Call
+`index_directory` on the project root to bulk-index, then `search_codebase`
+will find results.
 
 **"No module named 'mcp.types'"** -- A file named `mcp.py` is shadowing the
 `mcp` package. The server file is named `server.py` to avoid this. Do not
 rename it.
 
-**Re-indexing** -- Call `read_file` on the file again. Old chunks are deleted
-and the file is re-indexed from current source.
+**Re-indexing** -- Call `read_file` on the file again. If the file has changed,
+old chunks are deleted and the file is re-indexed automatically.
 
 **Full reset** -- `rm -rf ~/ContextMate/contextmate_db/`

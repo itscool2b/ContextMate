@@ -1,11 +1,13 @@
+from pathlib import Path
 from fastmcp import FastMCP
 from ollama import Ai
 from chroma import query_chunks
+from chunker import get_language_config
 from indexingpipeline import index
 
 mcp = FastMCP(
     name="context-mate",
-    instructions="this is the mcp which fetches only relevant context for the codebase making ai decisions less sloppy and saves money. nice",
+    instructions="Semantic code search MCP server. Indexes code into meaningful chunks and returns only what's relevant. Supports Python, JavaScript, TypeScript, Rust, Go, Java, C, C++, Ruby, and C#.",
 )
 
 session_stats = {"queries": 0, "chunks_returned": 0}
@@ -13,7 +15,7 @@ session_stats = {"queries": 0, "chunks_returned": 0}
 
 @mcp.tool
 def get_session_summary():
-    """This tool is to give an overview of how much money you have saved using this mcp server."""
+    """Returns stats on how many queries and chunks were served this session."""
     return {
         "queries": session_stats["queries"],
         "chunks_returned": session_stats["chunks_returned"],
@@ -23,8 +25,12 @@ def get_session_summary():
 
 @mcp.tool
 def read_file(path: str, reason: str):
-    """This tool is for parsing specific files of relevant contents instead of random slop that isnt needed for the job or context as a whole."""
-    index(path)
+    """Index a file and return only the chunks relevant to the given reason.
+    Supports: .py .js .jsx .mjs .ts .tsx .rs .go .java .c .h .cpp .cc .cxx .hpp .rb .cs"""
+    result = index(path)
+    if result["status"] == "error":
+        return {"error": result["message"]}
+
     query_embedding = Ai(reason).embed()
     results = query_chunks(query_embedding, path)
     session_stats["queries"] += 1
@@ -32,6 +38,7 @@ def read_file(path: str, reason: str):
     return {
         "path": path,
         "reason": reason,
+        "index_status": result["message"],
         "chunks": [
             {"text": doc, "metadata": meta}
             for doc, meta in zip(results["documents"][0], results["metadatas"][0])
@@ -41,7 +48,7 @@ def read_file(path: str, reason: str):
 
 @mcp.tool
 def search_codebase(query: str):
-    """This is a tool that will search the code base for relevant code from relevant files based on a single query."""
+    """Search all indexed files for code matching a natural language query."""
     query_embedding = Ai(query).embed()
     results = query_chunks(query_embedding, path=None, n_results=10)
     session_stats["queries"] += 1
@@ -53,6 +60,13 @@ def search_codebase(query: str):
             for doc, meta in zip(results["documents"][0], results["metadatas"][0])
         ],
     }
+
+
+@mcp.tool
+def index_directory(path: str):
+    """Index all supported files in a directory."""
+    results = [index(str(f)) for f in Path(path).rglob("*") if get_language_config(str(f))]
+    return {"indexed": sum(1 for r in results if r["status"] == "indexed"), "total": len(results)}
 
 
 if __name__ == "__main__":
