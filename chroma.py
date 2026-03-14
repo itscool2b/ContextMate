@@ -3,10 +3,6 @@ import chromadb
 client = chromadb.PersistentClient(path="./contextmate_db")
 collection = client.get_or_create_collection(name="contextmate")
 
-def is_indexed(path):
-    existing = collection.get(where={"path": path}, limit=1)
-    return len(existing["ids"]) > 0
-
 def upsert_chunk(chunk_id, embedding, text, metadata):
     collection.upsert(
         ids=[chunk_id],

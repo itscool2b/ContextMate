@@ -1,9 +1,8 @@
-from pathlib import Path
 from fastmcp import FastMCP
 from ollama import Ai
 from chroma import query_chunks
-from chunker import get_language_config
 from indexingpipeline import index
+from watcher import scan
 
 mcp = FastMCP(
     name="context-mate",
@@ -65,7 +64,7 @@ def search_codebase(query: str):
 @mcp.tool
 def index_directory(path: str):
     """Index all supported files in a directory."""
-    results = [index(str(f)) for f in Path(path).rglob("*") if get_language_config(str(f))]
+    results = scan(path)
     return {"indexed": sum(1 for r in results if r["status"] == "indexed"), "total": len(results)}
 
 

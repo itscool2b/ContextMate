@@ -139,7 +139,7 @@ After setup, Claude Code has four new tools:
 
 | Tool | What it does |
 |---|---|
-| `index_directory(path)` | Indexes all supported files in a directory recursively |
+| `index_directory(path)` | Indexes all supported files in a directory, skipping .git/node_modules/venv/etc |
 | `read_file(path, reason)` | Indexes a file and returns only the chunks relevant to your reason |
 | `search_codebase(query)` | Searches all indexed files for code matching a natural language query |
 | `get_session_summary()` | Shows how many queries and chunks were served this session |
@@ -238,7 +238,7 @@ runs vector similarity search and returns the top matching chunks.
 
 **Storage** -- ChromaDB persists to `./contextmate_db/` on disk. Data survives
 restarts. Changed files are re-indexed automatically on the next `read_file`
-call.
+or `index_directory` call.
 
 ---
 
@@ -264,6 +264,7 @@ call.
 ```
 ContextMate/
   server.py            MCP server entry point, tool definitions
+  watcher.py           directory scanner, skips junk dirs
   chroma.py            ChromaDB client, storage and query
   chunker.py           multi-language tree-sitter parser, AST to chunks
   indexingpipeline.py  parse -> chunk -> embed -> store
