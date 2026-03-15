@@ -244,6 +244,23 @@ or `index_directory` call.
 
 ---
 
+## Benchmark
+
+Tested on a 15-file TypeScript backend (~1,600 lines). Query: "how does
+authentication work?"
+
+| | Characters | Approx. tokens |
+|---|---|---|
+| Without ContextMate (read all files) | 49,705 | ~12,426 |
+| With ContextMate (top 10 chunks) | 3,612 | ~903 |
+| **Reduction** | | **93%** |
+
+ContextMate returned 10 targeted chunks from `oauth.ts`, `middleware.ts`,
+`user.ts`, and `notification.ts` — the files that actually deal with auth.
+The other 11 files were never loaded into context.
+
+---
+
 ## Supported Languages
 
 | Language | Extensions |
